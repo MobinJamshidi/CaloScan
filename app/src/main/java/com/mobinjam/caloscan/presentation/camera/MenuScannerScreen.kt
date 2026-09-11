@@ -9,23 +9,33 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
-fun MenuScannerScreen() {
+fun MenuScannerScreen(
+    viewModel: MenuScannerViewModel = koinViewModel()
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val detectedFoods by viewModel.detectedFoods.collectAsState()
 
-    // بررسی وضعیت دسترسی دوربین
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -35,77 +45,105 @@ fun MenuScannerScreen() {
         )
     }
 
-    // لانچر برای درخواست دسترسی از کاربر
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            hasCameraPermission = isGranted
-        }
+        onResult = { hasCameraPermission = it }
     )
 
-    // به محض باز شدن صفحه، اگر دسترسی نداریم درخواست بده
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
-    // اگر دسترسی داده شد، دوربین رو نشون بده
     if (hasCameraPermission) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                val previewView = PreviewView(ctx)
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+        Box(modifier = Modifier.fillMaxSize()) {
 
-                cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+            // Camera Preview
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    val previewView = PreviewView(ctx)
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
-                    // تنظیمات پیش‌نمایش دوربین
-                    val preview = Preview.Builder().build().also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
+                    cameraProviderFuture.addListener({
+                        val cameraProvider = cameraProviderFuture.get()
 
-                    // تنظیمات پردازش تصویر با ML Kit (تحلیل متن زنده)
-                    val imageAnalysis = ImageAnalysis.Builder()
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
-                        .also {
-                            it.setAnalyzer(
-                                ContextCompat.getMainExecutor(ctx),
-                                TextRecognitionAnalyzer { text ->
-                                    // چاپ متن‌های تشخیص داده شده در Logcat
-                                    if (text.text.isNotBlank()) {
-                                        println("CaloScan_AI: پیدا شد -> ${text.text}")
-                                    }
-                                }
-                            )
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(previewView.surfaceProvider)
                         }
 
-                    // انتخاب دوربین پشت
-                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                        val imageAnalysis = ImageAnalysis.Builder()
+                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .build()
+                            .also {
+                                it.setAnalyzer(
+                                    ContextCompat.getMainExecutor(ctx),
+                                    TextRecognitionAnalyzer { text ->
+                                        if (text.text.isNotBlank()) {
+                                            // Send detected text to ViewModel
+                                            viewModel.processDetectedText(text.text)
+                                        }
+                                    }
+                                )
+                            }
 
-                    try {
-                        cameraProvider.unbindAll()
-                        // متصل کردن همزمان Preview و ImageAnalysis به چرخه حیات
-                        cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            cameraSelector,
-                            preview,
-                            imageAnalysis
-                        )
-                    } catch (exc: Exception) {
-                        exc.printStackTrace()
+                        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                        try {
+                            cameraProvider.unbindAll()
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner,
+                                cameraSelector,
+                                preview,
+                                imageAnalysis
+                            )
+                        } catch (exc: Exception) {
+                            exc.printStackTrace()
+                        }
+                    }, ContextCompat.getMainExecutor(ctx))
+
+                    previewView
+                }
+            )
+
+            // UI Overlay for detected items
+            if (detectedFoods.isNotEmpty()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.4f)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(detectedFoods) { food ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White.copy(alpha = 0.9f)
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = food.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp,
+                                    color = Color.Black
+                                )
+                                Text(
+                                    text = "${food.calories} kcal | P: ${food.protein}g | C: ${food.carbs}g | F: ${food.fat}g",
+                                    color = Color.DarkGray
+                                )
+                            }
+                        }
                     }
-                }, ContextCompat.getMainExecutor(ctx))
-
-                previewView
+                }
             }
-        )
+        }
     } else {
-        // اگر کاربر دسترسی نداد، نمایش پیام خطا
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(text = "برای اسکن منو، به دسترسی دوربین نیاز داریم.")
+            Text(text = "Camera permission is required.")
         }
     }
 }

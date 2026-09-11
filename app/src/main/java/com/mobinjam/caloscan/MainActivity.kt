@@ -17,7 +17,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             CaloScanTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // فراخوانی صفحه دوربین
                     MenuScannerScreen()
                 }
             }
