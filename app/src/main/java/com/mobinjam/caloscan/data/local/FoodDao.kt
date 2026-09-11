@@ -11,7 +11,8 @@ interface FoodDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFoods(foods: List<FoodEntity>)
 
-    @Query("SELECT * FROM food_table WHERE LOWER(name) LIKE '%' || LOWER(:searchQuery) || '%' LIMIT 1")
+    // تغییر مهم: جستجوی دقیق فقط برای همان کلمه
+    @Query("SELECT * FROM food_table WHERE LOWER(name) = LOWER(:searchQuery) LIMIT 1")
     suspend fun findFoodByName(searchQuery: String): FoodEntity?
 
 }

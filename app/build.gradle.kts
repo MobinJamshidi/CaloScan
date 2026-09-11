@@ -7,11 +7,7 @@ plugins {
 
 android {
     namespace = "com.mobinjam.caloscan"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.mobinjam.caloscan"
@@ -69,6 +65,12 @@ dependencies {
 
     // Koin
     implementation(libs.koin.androidx.compose)
+
+    implementation(libs.androidx.compose.material.icons.extended)
+
+    implementation(libs.androidx.navigation.compose)
+
+    implementation(libs.gson)
 
     // Room
     implementation(libs.room.runtime)

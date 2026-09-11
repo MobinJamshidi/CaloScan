@@ -6,10 +6,12 @@ import com.mobinjam.caloscan.data.repository.FoodRepositoryImpl
 import com.mobinjam.caloscan.domain.repository.FoodRepository
 import com.mobinjam.caloscan.presentation.camera.MenuScannerViewModel
 import org.koin.android.ext.koin.androidApplication
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
+    // ساخت دیتابیس به صورت سینگلتون
     single {
         Room.databaseBuilder(
             androidApplication(),
@@ -19,9 +21,12 @@ val appModule = module {
             .build()
     }
 
-    single { get<AppDatabase>().foodDao }
+    // معرفی DAO
+    single { get<AppDatabase>().foodDao() }
 
-    single<FoodRepository> { FoodRepositoryImpl(get()) }
+    // معرفی ریپازیتوری به همراه پاس دادن Context
+    single<FoodRepository> { FoodRepositoryImpl(get(), androidContext()) }
 
+    // معرفی ViewModel
     viewModel { MenuScannerViewModel(get()) }
 }
